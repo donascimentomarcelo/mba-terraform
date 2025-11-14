@@ -2,11 +2,11 @@ variable "prefix" {
   type = string
 }
 
-variable "cidr_block" {
+variable "subnet_id" {
   type = string
 }
 
-variable "subnet_cidr_blocks" {
+variable "security_group_id" {
   type = list(string)
 }
 

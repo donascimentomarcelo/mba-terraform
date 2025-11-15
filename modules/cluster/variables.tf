@@ -3,7 +3,7 @@ variable "prefix" {
 }
 
 variable "subnet_id" {
-  type = string
+  type = list(string)
 }
 
 variable "security_group_id" {

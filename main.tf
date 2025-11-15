@@ -8,7 +8,7 @@ module "network" {
 module "cluster" {
   source            = "./modules/cluster"
   prefix            = var.prefix
-  subnet_id         = module.network.subnet_id[0]
+  subnet_id         = module.network.subnet_id
   instance_count    = var.instance_count
   security_group_id = [module.network.security_group_id]
 }

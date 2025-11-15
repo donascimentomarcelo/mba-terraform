@@ -10,13 +10,13 @@ data "aws_availability_zones" "available" {
 }
 
 resource "aws_subnet" "main" {
-  count             = length(var.subnet_cidr_blocks)
+  # count             = length(var.subnet_cidr_blocks)
+  for_each          = toset(var.subnet_cidr_blocks)
   vpc_id            = aws_vpc.main.id
-  cidr_block        = var.subnet_cidr_blocks[count.index]
-  availability_zone = data.aws_availability_zones.available.names[count.index % length(data.aws_availability_zones.available.names)]
-
+  cidr_block        = each.value
+  # availability_zone = data.aws_availability_zones.available.names[each.key % length(data.aws_availability_zones.available.names)]
   tags = {
-    Name = "${var.prefix}-subnet-${count.index}"
+    Name = "${var.prefix}-subnet-${each.key}"
   }
 }
 
@@ -39,8 +39,8 @@ resource "aws_route_table" "main" {
 }
 
 resource "aws_route_table_association" "main" {
-  count = length(var.subnet_cidr_blocks)
-  subnet_id      = aws_subnet.main[count.index].id
+  for_each       = toset(var.subnet_cidr_blocks)
+  subnet_id      = aws_subnet.main[each.key].id
   route_table_id = aws_route_table.main.id
 }
 

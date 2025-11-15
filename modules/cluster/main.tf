@@ -1,11 +1,4 @@
-data "aws_secretsmanager_secret" "main" {
-  arn = "arn:aws:secretsmanager:us-east-1:462839258964:secret:prod/Terraform/Db-qbASJq"
-}
-
-data "aws_secretsmanager_secret_version" "main" {
-  secret_id = data.aws_secretsmanager_secret.main.id
-}
-
+// TODO remover secrets da aws secrets manager
 resource "aws_launch_template" "main" {
   name          = "${var.prefix}-template"
   image_id      = "ami-0157af9aea2eef346"
@@ -13,11 +6,21 @@ resource "aws_launch_template" "main" {
 
   user_data = base64encode(
     <<EOF
-      #!/bin/bash
-      DB_STRING="Server=${jsondecode(data.aws_secretsmanager_secret_version.main.secret_string)["Host"]};DB=${jsondecode(data.aws_secretsmanager_secret_version.main.secret_string)["DB"]};
-
-      echo $DB_STRING > test.txt
-    EOF
+#!/bin/bash
+yum update -y
+yum install -y nginx
+systemctl start nginx
+systemctl enable nginx
+public_ip=$(curl http://checkip.amazonaws.com)
+echo "<html>
+  <head><title>My Web Server</title></head>
+  <body>
+    <h1>Hello, World!</h1>
+    <p>My public IP address is $public_ip</p>
+  </body>
+</html>" | tee /usr/share/nginx/html/index.html > /dev/null
+systemctl restart nginx
+EOF
   )
 
   network_interfaces {
@@ -39,6 +42,7 @@ resource "aws_autoscaling_group" "main" {
   min_size            = 1
   max_size            = 3
   vpc_zone_identifier = var.subnet_id
+  target_group_arns   = [aws_alb_target_group.main.arn]
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -91,5 +95,52 @@ resource "aws_cloudwatch_metric_alarm" "scale_in_alarm" {
   period              = "30"
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.main.name
+  }
+}
+
+resource "aws_alb" "main" {
+  name               = "${var.prefix}-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = var.security_group_id
+  subnets            = var.subnet_id
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name = "${var.prefix}-alb"
+  }
+}
+
+resource "aws_alb_target_group" "main" {
+  name     = "${var.prefix}-target-group"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = var.vpc_id
+
+  health_check {
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    path                = "/" // TODO path especifico para o health check, no caso do spring, seria /actuator/health
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    matcher             = "200"
+  }
+
+  tags = {
+    Name = "${var.prefix}-target-group"
+  }
+}
+
+resource "aws_alb_listener" "main" {
+  load_balancer_arn = aws_alb.main.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_alb_target_group.main.arn
   }
 }

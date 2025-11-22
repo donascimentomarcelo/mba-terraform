@@ -10,13 +10,17 @@ data "aws_availability_zones" "available" {
 }
 
 resource "aws_subnet" "main" {
-  # count             = length(var.subnet_cidr_blocks)
-  for_each          = toset(var.subnet_cidr_blocks)
+  for_each = {
+    for idx, cidr in var.subnet_cidr_blocks : cidr => {
+      cidr_block        = cidr
+      availability_zone = data.aws_availability_zones.available.names[idx % length(data.aws_availability_zones.available.names)]
+    }
+  }
   vpc_id            = aws_vpc.main.id
-  cidr_block        = each.value
-  # availability_zone = data.aws_availability_zones.available.names[each.key % length(data.aws_availability_zones.available.names)]
+  cidr_block        = each.value.cidr_block
+  availability_zone = each.value.availability_zone
   tags = {
-    Name = "${var.prefix}-subnet-${each.key}"
+    Name = "${var.prefix}-subnet-${replace(each.key, "/", "-")}"
   }
 }
 
